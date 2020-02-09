@@ -72,7 +72,6 @@ class VasyaPy_Server(Device):
             #self.logger.debug('init_device logger created %s %s', self.logger, self)
             self.device_name = self.get_name()
             self.dp = tango.DeviceProxy(self.device_name)
-            # read device properties
             self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
             self.adc_name = self.get_device_property('adc_name', 'binp/nbi/adc0')
             try:
@@ -175,16 +174,19 @@ def looping():
                     VasyaPy_Server.logger.info('Shot detected')
     VasyaPy_Server.logger.debug('loop exit')
 
+channels = ['channel_state'+str(k) for k in range(12)]
+
 def check_timer_state(timer_device):
         if timer_device is None:
-            return None
+            return False
         state = False
-        for k in range(12):
-            try:
-                av = timer_device.read_attribute('channel_state'+str(k))
-                state = state or av.value
-            except:
-                pass
+        avs = []
+        try:
+            avs = timer_device.read_attributes(channels)
+        except:
+            pass
+        for av in avs:
+            state = state or av.value
         return state
 
 
