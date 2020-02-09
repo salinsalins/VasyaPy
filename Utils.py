@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import time
 
 from PyQt5 import QtWidgets
 from PyQt5.QtWidgets import QWidget
@@ -144,4 +145,9 @@ def read_folder(folder, mask='.py'):
     # filter files
     filtered_files = [f for f in all_files if f.endswith(mask)]
     return filtered_files
+
+def time_ms():
+    t = time.time()
+    return time.strftime('%H:%M:%S')+(',%3d' % int((t-int(t))*1000.0))
+
 

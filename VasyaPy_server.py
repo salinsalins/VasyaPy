@@ -16,20 +16,36 @@ import tango
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, DebugIt
 from tango.server import Device, attribute, command, pipe, device_property
 
+NaN = float('nan')
 
 class VasyaPy_Server(Device):
     devices = []
-    #database = tango.Database()
+    logger = None
 
     devicetype = attribute(label="type", dtype=str,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
                         unit="", format="%s",
                         doc="Hello from Vasya")
+    timerstart = attribute(label="Shot_Time", dtype=float,
+                        display_level=DispLevel.OPERATOR,
+                        access=AttrWriteType.READ,
+                        unit="s", format="%f",
+                        doc="Timer start time")
+
+    timerhistory = attribute(label="Shot_Time_History", dtype=tango,
+                        display_level=DispLevel.OPERATOR,
+                        access=AttrWriteType.READ,
+                        unit="s", format="%f",
+                        doc="Timer start time history")
 
     def init_device(self):
         #print(time_ms(), 'init_device entry', self)
         self.device_type_str = 'Hello from Vasya'
+        self.timer_start = NaN
+        self.expected_timer_start = NaN
+        self.start_flag = False
+        self.times = []
         # init a thread lock
         if not hasattr(self, '_lock'):
             self._lock = Lock()
@@ -40,10 +56,14 @@ class VasyaPy_Server(Device):
             self.device_name = self.get_name()
             self.dp = tango.DeviceProxy(self.device_name)
             # read device properties
-            #self.reconnect_timeout = int(self.get_device_property('reconnect_timeout', 5000))
+            self.timer_name = int(self.get_device_property('timer_name', 'binp/nbi/timing'))
+            self.adc_name = int(self.get_device_property('adc_name', 'binp/nbi/adc0'))
+            self.dimer_device = tango.DeviceProxy(self.timer_name)
+            self.adc_device = tango.DeviceProxy(self.adc_name)
             self.set_state(DevState.INIT)
             try:
                 Device.init_device(self)
+                VasyaPy_Server.devices.append(self)
                 msg = '%s Vasya has been born' % self.device_name
                 self.logger.info(msg)
                 self.info_stream(msg)
@@ -64,6 +84,10 @@ class VasyaPy_Server(Device):
     def read_devicetype(self):
         with self._lock:
             return self.device_type_str
+
+    def read_timerstart(self):
+        with self._lock:
+            return self.timer_start
 
     @command(dtype_in=int)
     def SetLogLevel(self, level):
@@ -114,46 +138,42 @@ class VasyaPy_Server(Device):
     #         prop = ''
     #     return prop
 
-    # def restore_polling(self, attr_name: str):
-    #     try:
-    #         p = self.get_attribute_property(attr_name, 'polling')
-    #         pn = int(p)
-    #         self.dp.poll_attribute(attr_name, pn)
-    #     except:
-    #         #self.logger.warning('', exc_info=True)
-    #         pass
-
-def time_ms():
-    t = time.time()
-    return time.strftime('%H:%M:%S')+(',%3d' % int((t-int(t))*1000.0))
 
 def post_init_callback():
-    #util = tango.Util.instance()
-    #devices = util.get_device_list('*')
-    for dev in VasyaPy_Server.devices:
-        #print(dev)
-        #if hasattr(dev, 'add_io'):
-        dev.add_io()
-            #print(' ')
-
-def test():
-    time.sleep(0.5)
-    print('test')
+    pass
 
 def looping():
     VasyaPy_Server.logger.debug('loop entry')
-    time.sleep(5.0)
-    all_connected = True
+    time.sleep(0.1)
     for dev in VasyaPy_Server.devices:
-        dev.reconnect()
-        all_connected = all_connected and dev.is_connected()
-        VasyaPy_Server.logger.debug('loop %s %s', dev.device_name, all_connected)
-        #print(dev, all_connected)
+        mode = dev.timer_device.read_attribute('Start_mode')
+        if mode == 0:   #single
+            dev.expected_timer_start = NaN
+            if check_timer_state(dev.timer_device):
+                if not dev.start_flag:
+                    dev.timer_start = time.time()
+                    dev.times.append(dev.timer_start)
+                    dev.start_flag = True
+            else:
+                dev.start_flag = False
+        elif mode == 1:  # periodical
+            elapsed = dev.adc_device.read_attribute('Elapsed')
+            period = dev.timer_device.read_attribute('Period')
+            dev.expected_timer_start = time.time() + period - elapsed
     VasyaPy_Server.logger.debug('loop exit')
 
+def check_timer_state(timer_device):
+        if timer_device is None:
+            return None
+        state = False
+        for k in range(12):
+            try:
+                av = timer_device.read_attribute('channel_state'+str(k))
+                state = state or av.value
+            except:
+                pass
+        return state
+
+
 if __name__ == "__main__":
-    #if len(sys.argv) < 3:
-        #print("Usage: python VasyaPy_server.py device_name ip_address")
-        #exit(-1)
     VasyaPy_Server.run_server(post_init_callback=post_init_callback, event_loop=looping)
-    #ET7000_Server.run_server(post_init_callback=post_init_callback)
