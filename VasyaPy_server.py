@@ -159,12 +159,20 @@ def looping():
                         dev.timer_start = time.time()
                         dev.times.append(dev.timer_start)
                         dev.start_flag = True
+                        VasyaPy_Server.logger.info('Shot detected')
                 else:
                     dev.start_flag = False
             elif mode == 1:  # periodical
                 elapsed = dev.adc_device.read_attribute('Elapsed')
                 period = dev.timer_device.read_attribute('Period')
-                dev.expected_timer_start = time.time() + period - elapsed
+                t = time.time() + period - elapsed
+                if dev.expected_timer_start is NaN:
+                    dev.expected_timer_start = t
+                elif t > (dev.expected_timer_start - 1.0):
+                    dev.timer_start = dev.expected_timer_start
+                    dev.times.append(dev.timer_start)
+                    dev.expected_timer_start = t
+                    VasyaPy_Server.logger.info('Shot detected')
     VasyaPy_Server.logger.debug('loop exit')
 
 def check_timer_state(timer_device):
