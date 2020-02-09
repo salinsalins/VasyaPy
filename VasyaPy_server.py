@@ -33,7 +33,7 @@ class VasyaPy_Server(Device):
                         unit="s", format="%f",
                         doc="Timer start time")
 
-    timerhistory = attribute(label="Shot_Time_History", dtype=tango,
+    timerhistory = attribute(label="Shot_Time_History", dtype=tango.DevVarDoubleArray,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
                         unit="s", format="%f",
@@ -88,6 +88,10 @@ class VasyaPy_Server(Device):
     def read_timerstart(self):
         with self._lock:
             return self.timer_start
+
+    def read_timerhistory(self):
+        with self._lock:
+            return self.times
 
     @command(dtype_in=int)
     def SetLogLevel(self, level):
