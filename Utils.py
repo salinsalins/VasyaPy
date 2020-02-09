@@ -15,6 +15,7 @@ from PyQt5.QtWidgets import QLineEdit
 from PyQt5.QtCore import QSize
 from PyQt5.QtCore import QPoint
 
+NaN = float('nan')
 
 def config_logger(name: str=__name__, level: int=logging.DEBUG):
     logger = logging.getLogger(name)

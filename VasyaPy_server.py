@@ -15,22 +15,9 @@ from threading import Thread, Lock
 import tango
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, DebugIt
 from tango.server import Device, attribute, command, pipe, device_property
+from Utils import *
 
 NaN = float('nan')
-
-def config_logger(name: str=__name__, level: int=logging.DEBUG):
-    logger = logging.getLogger(name)
-    if not logger.hasHandlers():
-        logger.propagate = False
-        logger.setLevel(level)
-        f_str = '%(asctime)s,%(msecs)3d %(levelname)-7s [%(process)d:%(thread)d] %(filename)s ' \
-                '%(funcName)s(%(lineno)s) %(message)s'
-        log_formatter = logging.Formatter(f_str, datefmt='%H:%M:%S')
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(log_formatter)
-        logger.addHandler(console_handler)
-    return logger
-
 
 class VasyaPy_Server(Device):
     devices = []
