@@ -42,11 +42,11 @@ class VasyaPy_Server(Device):
                         unit="", format="%s",
                         doc="Hello from Vasya")
 
-    timerstart = attribute(label="Shot_Time", dtype=float,
+    lastshottime = attribute(label="Last_Shot_Time", dtype=float,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
                         unit="s", format="%f",
-                        doc="Timer start time")
+                        doc="Time of the last shot")
 
     timerhistory = attribute(label="Shot_Time_History", dtype=(float,),
                         max_dim_x=1024,
@@ -85,7 +85,7 @@ class VasyaPy_Server(Device):
             try:
                 Device.init_device(self)
                 VasyaPy_Server.devices.append(self)
-                msg = '%s Vasya has been born' % self.device_name
+                msg = 'Vasya has been born <%s>' % self.device_name
                 self.logger.info(msg)
                 self.info_stream(msg)
                 self.set_state(DevState.RUNNING)
@@ -106,7 +106,7 @@ class VasyaPy_Server(Device):
         with self._lock:
             return self.device_type_str
 
-    def read_timerstart(self):
+    def read_lastshottime(self):
         with self._lock:
             return self.timer_start
 
