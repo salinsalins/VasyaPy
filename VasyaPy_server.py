@@ -18,22 +18,38 @@ from tango.server import Device, attribute, command, pipe, device_property
 
 NaN = float('nan')
 
+def config_logger(name: str=__name__, level: int=logging.DEBUG):
+    logger = logging.getLogger(name)
+    if not logger.hasHandlers():
+        logger.propagate = False
+        logger.setLevel(level)
+        f_str = '%(asctime)s,%(msecs)3d %(levelname)-7s [%(process)d:%(thread)d] %(filename)s ' \
+                '%(funcName)s(%(lineno)s) %(message)s'
+        log_formatter = logging.Formatter(f_str, datefmt='%H:%M:%S')
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(log_formatter)
+        logger.addHandler(console_handler)
+    return logger
+
+
 class VasyaPy_Server(Device):
     devices = []
-    logger = None
+    logger = config_logger(level=logging.DEBUG)
 
     devicetype = attribute(label="type", dtype=str,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
                         unit="", format="%s",
                         doc="Hello from Vasya")
+
     timerstart = attribute(label="Shot_Time", dtype=float,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
                         unit="s", format="%f",
                         doc="Timer start time")
 
-    timerhistory = attribute(label="Shot_Time_History", dtype=tango.DevVarDoubleArray,
+    timerhistory = attribute(label="Shot_Time_History", dtype=(float,),
+                        max_dim_x=1024,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
                         unit="s", format="%f",
@@ -50,16 +66,21 @@ class VasyaPy_Server(Device):
         if not hasattr(self, '_lock'):
             self._lock = Lock()
         with self._lock:
-            self.logger = self.config_logger(level=logging.INFO)
-            VasyaPy_Server.logger = self.logger
+            #self.logger = VasyaPy_Server.logger
+            #self.logger = self.config_logger(level=logging.INFO)
+            #VasyaPy_Server.logger = self.logger
             #self.logger.debug('init_device logger created %s %s', self.logger, self)
             self.device_name = self.get_name()
             self.dp = tango.DeviceProxy(self.device_name)
             # read device properties
-            self.timer_name = int(self.get_device_property('timer_name', 'binp/nbi/timing'))
-            self.adc_name = int(self.get_device_property('adc_name', 'binp/nbi/adc0'))
-            self.dimer_device = tango.DeviceProxy(self.timer_name)
-            self.adc_device = tango.DeviceProxy(self.adc_name)
+            self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
+            self.adc_name = self.get_device_property('adc_name', 'binp/nbi/adc0')
+            try:
+                self.timer_device = tango.DeviceProxy(self.timer_name)
+                self.adc_device = tango.DeviceProxy(self.adc_name)
+            except:
+                self.timer_device = None
+                self.adc_device = None
             self.set_state(DevState.INIT)
             try:
                 Device.init_device(self)
@@ -118,52 +139,32 @@ class VasyaPy_Server(Device):
             pass
         return result
 
-    def config_logger(self, name: str=__name__, level: int=logging.DEBUG):
-        logger = logging.getLogger(name)
-        if not logger.hasHandlers():
-            logger.propagate = False
-            logger.setLevel(level)
-            f_str = '%(asctime)s,%(msecs)3d %(levelname)-7s [%(process)d:%(thread)d] %(filename)s ' \
-                    '%(funcName)s(%(lineno)s) %(message)s'
-            log_formatter = logging.Formatter(f_str, datefmt='%H:%M:%S')
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(log_formatter)
-            logger.addHandler(console_handler)
-        return logger
-
-    # def get_attribute_property(self, attr_name: str, prop_name: str):
-    #     device_name = self.get_name()
-    #     databse = self.database
-    #     all_attr_prop = databse.get_device_attribute_property(device_name, attr_name)
-    #     all_prop = all_attr_prop[attr_name]
-    #     if prop_name in all_prop:
-    #         prop = all_prop[prop_name][0]
-    #     else:
-    #         prop = ''
-    #     return prop
-
 
 def post_init_callback():
     pass
 
 def looping():
-    VasyaPy_Server.logger.debug('loop entry')
     time.sleep(0.1)
+    VasyaPy_Server.logger.debug('loop entry')
     for dev in VasyaPy_Server.devices:
-        mode = dev.timer_device.read_attribute('Start_mode')
-        if mode == 0:   #single
-            dev.expected_timer_start = NaN
-            if check_timer_state(dev.timer_device):
-                if not dev.start_flag:
-                    dev.timer_start = time.time()
-                    dev.times.append(dev.timer_start)
-                    dev.start_flag = True
-            else:
-                dev.start_flag = False
-        elif mode == 1:  # periodical
-            elapsed = dev.adc_device.read_attribute('Elapsed')
-            period = dev.timer_device.read_attribute('Period')
-            dev.expected_timer_start = time.time() + period - elapsed
+        with dev._lock:
+            if dev.timer_device is None or dev.adc_device is None:
+                VasyaPy_Server.logger.debug('Timer or ADC is not present - loop exit')
+                return
+            mode = dev.timer_device.read_attribute('Start_mode')
+            if mode == 0:   #single
+                dev.expected_timer_start = NaN
+                if check_timer_state(dev.timer_device):
+                    if not dev.start_flag:
+                        dev.timer_start = time.time()
+                        dev.times.append(dev.timer_start)
+                        dev.start_flag = True
+                else:
+                    dev.start_flag = False
+            elif mode == 1:  # periodical
+                elapsed = dev.adc_device.read_attribute('Elapsed')
+                period = dev.timer_device.read_attribute('Period')
+                dev.expected_timer_start = time.time() + period - elapsed
     VasyaPy_Server.logger.debug('loop exit')
 
 def check_timer_state(timer_device):
