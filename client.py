@@ -43,11 +43,13 @@ def event_callback(*vars):
 
 
 if __name__ == '__main__':
-    timer = tango.DeviceProxy('binp/nbi/timing')
-    logger.debug('%s Timer created', timer)
+    adc = tango.DeviceProxy('binp/nbi/adc0')
+    logger.debug('%s Timer created', adc)
     attr_name = 'Elapsed'
-    attr = timer.read_attribute(attr_name)
+    attr = adc.read_attribute(attr_name)
     logger.debug('%s Attribute read', attr)
     logger.debug('%s Attribute value', attr.value)
-    attr.subscribe_event(tango.EventType.CHANGE_EVENT, event_callback)
+    adc.subscribe_event(attr_name, tango.EventType.CHANGE_EVENT, event_callback)
+    while True:
+        time.sleep(1.0)
 

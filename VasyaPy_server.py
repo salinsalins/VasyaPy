@@ -35,82 +35,70 @@ class VasyaPy_Server(Device):
                         unit="s", format="%f",
                         doc="Time of the last shot")
 
-    timerhistory = attribute(label="Shot_Time_History", dtype=(float,),
-                        max_dim_x=1024,
-                        display_level=DispLevel.OPERATOR,
-                        access=AttrWriteType.READ,
-                        unit="s", format="%f",
-                        doc="Timer start time history")
-
     def init_device(self):
         #print(time_ms(), 'init_device entry', self)
         self.device_type_str = 'Hello from Vasya'
-        self.timer_start = NaN
-        self.expected_timer_start = NaN
-        self.start_flag = False
-        self.times = []
-        # init a thread lock
-        if not hasattr(self, '_lock'):
-            self._lock = Lock()
-        with self._lock:
-            #self.logger = VasyaPy_Server.logger
-            #self.logger = self.config_logger(level=logging.INFO)
-            #VasyaPy_Server.logger = self.logger
-            #self.logger.debug('init_device logger created %s %s', self.logger, self)
-            self.device_name = self.get_name()
-            self.dp = tango.DeviceProxy(self.device_name)
-            self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
-            self.adc_name = self.get_device_property('adc_name', 'binp/nbi/adc0')
-            try:
-                self.timer_device = tango.DeviceProxy(self.timer_name)
-                self.adc_device = tango.DeviceProxy(self.adc_name)
-            except:
-                self.timer_device = None
-                self.adc_device = None
-            self.set_state(DevState.INIT)
-            try:
-                Device.init_device(self)
-                VasyaPy_Server.devices.append(self)
-                msg = 'Vasya has been born <%s>' % self.device_name
-                self.logger.info(msg)
-                self.info_stream(msg)
-                self.set_state(DevState.RUNNING)
-            except:
-                msg = '%s Vasya creation error' % self.device_name
-                self.logger.debug('', exc_info=True)
-                self.logger.error(msg)
-                self.error_stream(msg)
-                self.set_state(DevState.FAULT)
-
-    def delete_device(self):
-        with self._lock:
-            msg = '%s Vasya has been deleted' % self.device_name
+        self.last_shot_time = NaN
+        self.device_name = self.get_name()
+        self.device_proxy = tango.DeviceProxy(self.device_name)
+        self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
+        self.adc_name = self.get_device_property('adc_name', 'binp/nbi/adc0')
+        try:
+            self.timer_device = tango.DeviceProxy(self.timer_name)
+            self.adc_device = tango.DeviceProxy(self.adc_name)
+        except:
+            self.timer_device = None
+            self.adc_device = None
+        self.set_state(DevState.INIT)
+        try:
+            Device.init_device(self)
+            VasyaPy_Server.devices.append(self)
+            msg = 'Vasya has been born <%s>' % self.device_name
             self.logger.info(msg)
             self.info_stream(msg)
+            self.set_state(DevState.RUNNING)
+        except:
+            msg = '%s Vasya creation error' % self.device_name
+            self.logger.debug('', exc_info=True)
+            self.logger.error(msg)
+            self.error_stream(msg)
+            self.set_state(DevState.FAULT)
+
+    def delete_device(self):
+        msg = '%s Vasya has been deleted' % self.device_name
+        self.logger.info(msg)
+        self.info_stream(msg)
 
     def read_devicetype(self):
-        with self._lock:
-            return self.device_type_str
+        return self.device_type_str
 
     def read_lastshottime(self):
-        with self._lock:
-            return self.timer_start
-
-    def read_timerhistory(self):
-        with self._lock:
-            return self.times
+        if self.adc_device is None:
+            VasyaPy_Server.logger.error('ADC is not present')
+            return NaN
+        elapsed = self.adc_device.read_attribute('Elapsed')
+        t0 = time.time()
+        if elapsed.quality != tango._tango.AttrQuality.ATTR_VALID:
+            self.logger.info('Non Valid attribute %s %s' % (elapsed.name, elapsed.quality))
+        t = elapsed.time.tv_sec + (1.0e-6 * elapsed.time.tv_usec)
+        #VasyaPy_Server.logger.debug('elapsed.value %s' % elapsed.value)
+        #VasyaPy_Server.logger.debug('t0 %f' % t0)
+        #VasyaPy_Server.logger.debug('elapsed read time %f' % t)
+        self.last_shot_time = t0 - elapsed.value
+        return self.last_shot_time
 
     @command(dtype_in=int)
     def SetLogLevel(self, level):
-        with self._lock:
-            self.logger.setLevel(level)
-            msg = '%s Log level set to %d' % (self.device_name, level)
-            self.logger.info(msg)
-            self.info_stream(msg)
+        self.logger.setLevel(level)
+        msg = '%s Log level set to %d' % (self.device_name, level)
+        self.logger.info(msg)
+        self.info_stream(msg)
 
     def get_device_property(self, prop: str, default=None):
+        if not hasattr(self, 'device_proxy') or self.device_proxy is None:
+            self.device_proxy = tango.DeviceProxy(self.device_name)
         # read property
-        pr = self.dp.get_property(prop)[prop]
+        pr = self.device_proxy.get_property(prop)[prop]
         result = None
         if len(pr) > 0:
             result = pr[0]
@@ -132,33 +120,6 @@ def post_init_callback():
 def looping():
     time.sleep(0.1)
     VasyaPy_Server.logger.debug('loop entry')
-    for dev in VasyaPy_Server.devices:
-        with dev._lock:
-            if dev.timer_device is None or dev.adc_device is None:
-                VasyaPy_Server.logger.debug('Timer or ADC is not present - loop exit')
-                return
-            mode = dev.timer_device.read_attribute('Start_mode')
-            if mode == 0:   #single
-                dev.expected_timer_start = NaN
-                if check_timer_state(dev.timer_device):
-                    if not dev.start_flag:
-                        dev.timer_start = time.time()
-                        dev.times.append(dev.timer_start)
-                        dev.start_flag = True
-                        VasyaPy_Server.logger.info('Shot detected')
-                else:
-                    dev.start_flag = False
-            elif mode == 1:  # periodical
-                elapsed = dev.adc_device.read_attribute('Elapsed')
-                period = dev.timer_device.read_attribute('Period')
-                t = time.time() + period - elapsed
-                if dev.expected_timer_start is NaN:
-                    dev.expected_timer_start = t
-                elif t > (dev.expected_timer_start - 1.0):
-                    dev.timer_start = dev.expected_timer_start
-                    dev.times.append(dev.timer_start)
-                    dev.expected_timer_start = t
-                    VasyaPy_Server.logger.info('Shot detected')
     VasyaPy_Server.logger.debug('loop exit')
 
 channels = ['channel_state'+str(k) for k in range(12)]
@@ -178,4 +139,5 @@ def check_timer_state(timer_device):
 
 
 if __name__ == "__main__":
-    VasyaPy_Server.run_server(post_init_callback=post_init_callback, event_loop=looping)
+    #VasyaPy_Server.run_server(post_init_callback=post_init_callback, event_loop=looping)
+    VasyaPy_Server.run_server()
