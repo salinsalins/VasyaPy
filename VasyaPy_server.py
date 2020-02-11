@@ -12,6 +12,7 @@ import numpy
 import traceback
 import math
 from threading import Thread, Lock
+import winsound
 
 import tango
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, DebugIt
@@ -23,6 +24,7 @@ NaN = float('nan')
 class VasyaPy_Server(Device):
     devices = []
     logger = config_logger(level=logging.DEBUG)
+    beeped = False
 
     devicetype = attribute(label="type", dtype=str,
                         display_level=DispLevel.OPERATOR,
@@ -60,7 +62,8 @@ class VasyaPy_Server(Device):
         self.set_state(DevState.INIT)
         try:
             Device.init_device(self)
-            VasyaPy_Server.devices.append(self)
+            if self not in VasyaPy_Server.devices:
+                VasyaPy_Server.devices.append(self)
             msg = 'Vasya has been born <%s>' % self.device_name
             self.logger.info(msg)
             self.info_stream(msg)
@@ -125,8 +128,20 @@ def post_init_callback():
     pass
 
 def looping():
-    time.sleep(0.1)
+    time.sleep(0.3)
     VasyaPy_Server.logger.debug('loop entry')
+    for dev in VasyaPy_Server.devices:
+        if dev.adc_device is not None and dev.timer_device is not None:
+            mode = dev.timer_device.read_attribute('Start_mode')
+            if mode == 1:
+                period = dev.timer_device.read_attribute('Period')
+                elapsed = dev.adc_device.read_attribute('Elapsed')
+                remained = period - elapsed
+                if not VasyaPy_Server.beeped and remained < 2.0 and remained > 0.0:
+                    winsound.Beep(1000, 300)
+                    VasyaPy_Server.beeped = True
+                if remained < 0.0:
+                    VasyaPy_Server.beeped = False
     VasyaPy_Server.logger.debug('loop exit')
 
 channels = ['channel_state'+str(k) for k in range(12)]
