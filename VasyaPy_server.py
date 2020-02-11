@@ -19,8 +19,6 @@ from tango import AttrQuality, AttrWriteType, DispLevel, DevState, DebugIt
 from tango.server import Device, attribute, command, pipe, device_property
 from Utils import *
 
-NaN = float('nan')
-
 class VasyaPy_Server(Device):
     devices = []
     logger = config_logger(level=logging.DEBUG)
