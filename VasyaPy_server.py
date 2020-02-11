@@ -137,10 +137,10 @@ def looping():
                 period = dev.timer_device.read_attribute('Period')
                 elapsed = dev.adc_device.read_attribute('Elapsed')
                 remained = period - elapsed
-                if not VasyaPy_Server.beeped and remained < 2.0 and remained > 0.0:
+                if not VasyaPy_Server.beeped and remained < 1.0:
                     winsound.Beep(1000, 300)
                     VasyaPy_Server.beeped = True
-                if remained < 0.0:
+                if remained > 2.0:
                     VasyaPy_Server.beeped = False
     VasyaPy_Server.logger.debug('loop exit')
 
