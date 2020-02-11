@@ -5,6 +5,7 @@
 VasyaPy tango device server"""
 
 import sys
+import os
 import time
 import logging
 import numpy
@@ -43,12 +44,19 @@ class VasyaPy_Server(Device):
         self.device_proxy = tango.DeviceProxy(self.device_name)
         self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
         self.adc_name = self.get_device_property('adc_name', 'binp/nbi/adc0')
+        level = self.get_device_property('loglevel', 10)
+        self.logger.setLevel(level)
         try:
             self.timer_device = tango.DeviceProxy(self.timer_name)
             self.adc_device = tango.DeviceProxy(self.adc_name)
         except:
             self.timer_device = None
             self.adc_device = None
+            msg = '%s Timer or ADC can not be found - exit' % self.device_name
+            self.logger.debug('', exc_info=True)
+            self.logger.error(msg)
+            self.error_stream(msg)
+            os._exit(5)
         self.set_state(DevState.INIT)
         try:
             Device.init_device(self)
@@ -97,7 +105,6 @@ class VasyaPy_Server(Device):
     def get_device_property(self, prop: str, default=None):
         if not hasattr(self, 'device_proxy') or self.device_proxy is None:
             self.device_proxy = tango.DeviceProxy(self.device_name)
-        # read property
         pr = self.device_proxy.get_property(prop)[prop]
         result = None
         if len(pr) > 0:
@@ -110,7 +117,7 @@ class VasyaPy_Server(Device):
             else:
                 result = type(default)(result)
         except:
-            pass
+            result = default
         return result
 
 
