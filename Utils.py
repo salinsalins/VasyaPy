@@ -151,4 +151,18 @@ def time_ms():
     t = time.time()
     return time.strftime('%H:%M:%S')+(',%3d' % int((t-int(t))*1000.0))
 
+channels = ['channel_state'+str(k) for k in range(12)]
+
+def check_timer_state(timer_device):
+        if timer_device is None:
+            return False
+        state = False
+        avs = []
+        try:
+            avs = timer_device.read_attributes(channels)
+        except:
+            pass
+        for av in avs:
+            state = state or av.value
+        return state
 

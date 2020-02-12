@@ -11,6 +11,7 @@ import logging
 import numpy
 import traceback
 import math
+from math import isnan
 from threading import Thread, Lock
 import winsound
 
@@ -30,16 +31,23 @@ class VasyaPy_Server(Device):
                         unit="", format="%s",
                         doc="Hello from Vasya")
 
-    lastshottime = attribute(label="Last_Shot_Time", dtype=float,
+    lastshottime = attribute(label="Last_shot_time", dtype=float,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
-                        unit="s", format="%f",
+                        unit=" s", format="%f",
                         doc="Time of the last shot")
+
+    shotnumber = attribute(label="Shot_Number", dtype=int,
+                        display_level=DispLevel.OPERATOR,
+                        access=AttrWriteType.READ,
+                        unit=" .", format="%d",
+                        doc="Number of the last shot")
 
     def init_device(self):
         #print(time_ms(), 'init_device entry', self)
         self.device_type_str = 'Hello from Vasya'
         self.last_shot_time = NaN
+        self.last_shot = -2
         self.device_name = self.get_name()
         self.device_proxy = tango.DeviceProxy(self.device_name)
         self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
@@ -84,17 +92,26 @@ class VasyaPy_Server(Device):
     def read_lastshottime(self):
         if self.adc_device is None:
             VasyaPy_Server.logger.error('ADC is not present')
+            self.error_stream('ADC is not present')
             return NaN
         elapsed = self.adc_device.read_attribute('Elapsed')
         t0 = time.time()
         if elapsed.quality != tango._tango.AttrQuality.ATTR_VALID:
-            self.logger.info('Non Valid attribute %s %s' % (elapsed.name, elapsed.quality))
+            self.logger.warning('Non Valid attribute %s %s' % (elapsed.name, elapsed.quality))
         t = elapsed.time.tv_sec + (1.0e-6 * elapsed.time.tv_usec)
         #VasyaPy_Server.logger.debug('elapsed.value %s' % elapsed.value)
         #VasyaPy_Server.logger.debug('t0 %f' % t0)
         #VasyaPy_Server.logger.debug('elapsed read time %f' % t)
         self.last_shot_time = t0 - elapsed.value
         return self.last_shot_time
+
+    def read_shotnumber(self):
+        if self.adc_device is None:
+            VasyaPy_Server.logger.error('ADC is not present')
+            self.error_stream('ADC is not present')
+            return -1
+        self.last_shot = self.adc_device.read_attribute('Shot_id')
+        return self.last_shot
 
     @command(dtype_in=int)
     def SetLogLevel(self, level):
@@ -146,22 +163,6 @@ def looping():
                 if remained > 2.0:
                     VasyaPy_Server.beeped = False
     #VasyaPy_Server.logger.debug('loop exit')
-
-channels = ['channel_state'+str(k) for k in range(12)]
-
-def check_timer_state(timer_device):
-        if timer_device is None:
-            return False
-        state = False
-        avs = []
-        try:
-            avs = timer_device.read_attributes(channels)
-        except:
-            pass
-        for av in avs:
-            state = state or av.value
-        return state
-
 
 if __name__ == "__main__":
     #VasyaPy_Server.run_server(post_init_callback=post_init_callback, event_loop=looping)
