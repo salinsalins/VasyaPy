@@ -43,6 +43,12 @@ class VasyaPy_Server(Device):
                         unit=" .", format="%d",
                         doc="Number of the last shot")
 
+    rfready = attribute(label="RF_Ready", dtype=bool,
+                        display_level=DispLevel.OPERATOR,
+                        access=AttrWriteType.READ,
+                        unit="", format="",
+                        doc="Readiness of RF system")
+
     def init_device(self):
         #print(time_ms(), 'init_device entry', self)
         self.device_type_str = 'Hello from Vasya'
@@ -113,6 +119,25 @@ class VasyaPy_Server(Device):
         self.last_shot = self.adc_device.read_attribute('Shot_id').value
         return self.last_shot
 
+    def read_rfready(self):
+        if self.adc_device is not None and self.timer_device is not None:
+            self.logger.error('ADC or timer is not present')
+            self.error_stream('ADC or timer is not present')
+            return False
+        av = read_attribute_value(self.adc_device, 'chan16')
+        av_coeff = read_coeff(self.adc_device, 'chan16')
+        cc = self.adc_device.read_attribute('chan22')
+        cc_coeff = read_coeff(self.adc_device, 'chan22')
+        pr = self.timer_device.read_attribute('di60')
+        if av.quality != tango._tango.AttrQuality.ATTR_VALID or \
+                av.value * av_coeff < 8.0 or \
+                cc.quality != tango._tango.AttrQuality.ATTR_VALID or \
+                cc.value * cc_coeff < 0.1 or \
+                not pr.value:
+            return False
+        else:
+            return True
+
     @command(dtype_in=int)
     def SetLogLevel(self, level):
         self.logger.setLevel(level)
@@ -138,6 +163,21 @@ class VasyaPy_Server(Device):
             result = default
         return result
 
+
+def read_coeff(dev: None, attr: str):
+    try:
+        config = dev.get_attribute_config_ex(attr)[0]
+        return float(config.display_unit)
+    except:
+        return 1.0
+
+def read_attribute_value(dev: None, attr_name: str):
+    try:
+        attribute = dev.read_attribute(attr_name)
+        coeff = read_coeff(dev, attr_name)
+        return attribute.value * coeff
+    except:
+        return float('nan')
 
 def post_init_callback():
     pass
