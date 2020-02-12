@@ -11,6 +11,7 @@ import logging
 import numpy
 import traceback
 import math
+from math import isnan
 from threading import Thread, Lock
 import winsound
 
@@ -84,11 +85,12 @@ class VasyaPy_Server(Device):
     def read_lastshottime(self):
         if self.adc_device is None:
             VasyaPy_Server.logger.error('ADC is not present')
+            self.error_stream('ADC is not present')
             return NaN
         elapsed = self.adc_device.read_attribute('Elapsed')
         t0 = time.time()
         if elapsed.quality != tango._tango.AttrQuality.ATTR_VALID:
-            self.logger.info('Non Valid attribute %s %s' % (elapsed.name, elapsed.quality))
+            self.logger.warning('Non Valid attribute %s %s' % (elapsed.name, elapsed.quality))
         t = elapsed.time.tv_sec + (1.0e-6 * elapsed.time.tv_usec)
         #VasyaPy_Server.logger.debug('elapsed.value %s' % elapsed.value)
         #VasyaPy_Server.logger.debug('t0 %f' % t0)
@@ -142,22 +144,6 @@ def looping():
                 if remained > 2.0:
                     VasyaPy_Server.beeped = False
     #VasyaPy_Server.logger.debug('loop exit')
-
-channels = ['channel_state'+str(k) for k in range(12)]
-
-def check_timer_state(timer_device):
-        if timer_device is None:
-            return False
-        state = False
-        avs = []
-        try:
-            avs = timer_device.read_attributes(channels)
-        except:
-            pass
-        for av in avs:
-            state = state or av.value
-        return state
-
 
 if __name__ == "__main__":
     #VasyaPy_Server.run_server(post_init_callback=post_init_callback, event_loop=looping)
