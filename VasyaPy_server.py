@@ -127,7 +127,7 @@ def post_init_callback():
 
 def looping():
     time.sleep(0.3)
-    VasyaPy_Server.logger.debug('loop entry')
+    #VasyaPy_Server.logger.debug('loop entry')
     for dev in VasyaPy_Server.devices:
         if dev.adc_device is not None and dev.timer_device is not None:
             mode = dev.timer_device.read_attribute('Start_mode')
@@ -136,11 +136,12 @@ def looping():
                 elapsed = dev.adc_device.read_attribute('Elapsed')
                 remained = period - elapsed
                 if not VasyaPy_Server.beeped and remained < 1.0:
+                    VasyaPy_Server.logger.debug('1 second to shot - Beep')
                     winsound.Beep(1000, 300)
                     VasyaPy_Server.beeped = True
                 if remained > 2.0:
                     VasyaPy_Server.beeped = False
-    VasyaPy_Server.logger.debug('loop exit')
+    #VasyaPy_Server.logger.debug('loop exit')
 
 channels = ['channel_state'+str(k) for k in range(12)]
 
@@ -160,4 +161,5 @@ def check_timer_state(timer_device):
 
 if __name__ == "__main__":
     #VasyaPy_Server.run_server(post_init_callback=post_init_callback, event_loop=looping)
-    VasyaPy_Server.run_server()
+    VasyaPy_Server.run_server(event_loop=looping)
+    #VasyaPy_Server.run_server()
