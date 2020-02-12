@@ -193,9 +193,6 @@ def looping():
                 period = dev.timer_device.read_attribute('Period').value
                 elapsed = dev.adc_device.read_attribute('Elapsed').value
                 remained = period - elapsed
-                #VasyaPy_Server.logger.debug('remained %s' % remained)
-                #VasyaPy_Server.logger.debug('beeped %s' % VasyaPy_Server.beeped)
-                #VasyaPy_Server.logger.debug('cond %s' % (not VasyaPy_Server.beeped and remained < 1.0))
                 if not VasyaPy_Server.beeped and remained < 1.0:
                     VasyaPy_Server.logger.debug('1 second to shot - Beep')
                     winsound.Beep(500, 300)
