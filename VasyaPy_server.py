@@ -52,7 +52,7 @@ class VasyaPy_Server(Device):
     def init_device(self):
         #print(time_ms(), 'init_device entry', self)
         self.device_type_str = 'Hello from Vasya'
-        self.last_shot_time = NaN
+        self.last_shot_time = -1.0
         self.last_shot = -2
         self.device_name = self.get_name()
         self.device_proxy = tango.DeviceProxy(self.device_name)
