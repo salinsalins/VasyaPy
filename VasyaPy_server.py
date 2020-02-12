@@ -31,16 +31,23 @@ class VasyaPy_Server(Device):
                         unit="", format="%s",
                         doc="Hello from Vasya")
 
-    lastshottime = attribute(label="Last_Shot_Time", dtype=float,
+    lastshottime = attribute(label="Last_shot_time", dtype=float,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
-                        unit="s", format="%f",
+                        unit=" s", format="%f",
                         doc="Time of the last shot")
+
+    shotnumber = attribute(label="Shot_Number", dtype=int,
+                        display_level=DispLevel.OPERATOR,
+                        access=AttrWriteType.READ,
+                        unit=" .", format="%d",
+                        doc="Number of the last shot")
 
     def init_device(self):
         #print(time_ms(), 'init_device entry', self)
         self.device_type_str = 'Hello from Vasya'
         self.last_shot_time = NaN
+        self.last_shot = -2
         self.device_name = self.get_name()
         self.device_proxy = tango.DeviceProxy(self.device_name)
         self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
@@ -97,6 +104,14 @@ class VasyaPy_Server(Device):
         #VasyaPy_Server.logger.debug('elapsed read time %f' % t)
         self.last_shot_time = t0 - elapsed.value
         return self.last_shot_time
+
+    def read_shotnumber(self):
+        if self.adc_device is None:
+            VasyaPy_Server.logger.error('ADC is not present')
+            self.error_stream('ADC is not present')
+            return -1
+        self.last_shot = self.adc_device.read_attribute('Shot_id')
+        return self.last_shot
 
     @command(dtype_in=int)
     def SetLogLevel(self, level):
