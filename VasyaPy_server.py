@@ -110,7 +110,7 @@ class VasyaPy_Server(Device):
             VasyaPy_Server.logger.error('ADC is not present')
             self.error_stream('ADC is not present')
             return -1
-        self.last_shot = self.adc_device.read_attribute('Shot_id')
+        self.last_shot = self.adc_device.read_attribute('Shot_id').value
         return self.last_shot
 
     @command(dtype_in=int)
