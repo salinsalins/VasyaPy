@@ -22,7 +22,7 @@ from Utils import *
 class VasyaPy_Server(Device):
     devices = []
     logger = config_logger(level=logging.DEBUG)
-    beeped = False
+    beeped = True
 
     devicetype = attribute(label="type", dtype=str,
                         display_level=DispLevel.OPERATOR,
