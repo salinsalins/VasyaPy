@@ -130,14 +130,18 @@ def looping():
     #VasyaPy_Server.logger.debug('loop entry')
     for dev in VasyaPy_Server.devices:
         if dev.adc_device is not None and dev.timer_device is not None:
-            mode = dev.timer_device.read_attribute('Start_mode')
+            mode = dev.timer_device.read_attribute('Start_mode').value
+            #VasyaPy_Server.logger.debug('mode %s' % mode)
             if mode == 1:
-                period = dev.timer_device.read_attribute('Period')
-                elapsed = dev.adc_device.read_attribute('Elapsed')
+                period = dev.timer_device.read_attribute('Period').value
+                elapsed = dev.adc_device.read_attribute('Elapsed').value
                 remained = period - elapsed
+                #VasyaPy_Server.logger.debug('remained %s' % remained)
+                #VasyaPy_Server.logger.debug('beeped %s' % VasyaPy_Server.beeped)
+                #VasyaPy_Server.logger.debug('cond %s' % (not VasyaPy_Server.beeped and remained < 1.0))
                 if not VasyaPy_Server.beeped and remained < 1.0:
                     VasyaPy_Server.logger.debug('1 second to shot - Beep')
-                    winsound.Beep(1000, 300)
+                    winsound.Beep(500, 300)
                     VasyaPy_Server.beeped = True
                 if remained > 2.0:
                     VasyaPy_Server.beeped = False
