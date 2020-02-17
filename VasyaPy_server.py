@@ -31,16 +31,29 @@ class VasyaPy_Server(Device):
                         unit="", format="%s",
                         doc="Hello from Vasya")
 
-    lastshottime = attribute(label="Last_Shot_Time", dtype=float,
+    lastshottime = attribute(label="Last_shot_time", dtype=float,
                         display_level=DispLevel.OPERATOR,
                         access=AttrWriteType.READ,
-                        unit="s", format="%f",
+                        unit=" s", format="%f",
                         doc="Time of the last shot")
+
+    shotnumber = attribute(label="Shot_Number", dtype=int,
+                        display_level=DispLevel.OPERATOR,
+                        access=AttrWriteType.READ,
+                        unit=" .", format="%d",
+                        doc="Number of the last shot")
+
+    rfready = attribute(label="RF_Ready", dtype=bool,
+                        display_level=DispLevel.OPERATOR,
+                        access=AttrWriteType.READ,
+                        unit="", format="",
+                        doc="Readiness of RF system")
 
     def init_device(self):
         #print(time_ms(), 'init_device entry', self)
         self.device_type_str = 'Hello from Vasya'
-        self.last_shot_time = NaN
+        self.last_shot_time = -1.0
+        self.last_shot = -2
         self.device_name = self.get_name()
         self.device_proxy = tango.DeviceProxy(self.device_name)
         self.timer_name = self.get_device_property('timer_name', 'binp/nbi/timing')
@@ -98,6 +111,33 @@ class VasyaPy_Server(Device):
         self.last_shot_time = t0 - elapsed.value
         return self.last_shot_time
 
+    def read_shotnumber(self):
+        if self.adc_device is None:
+            VasyaPy_Server.logger.error('ADC is not present')
+            self.error_stream('ADC is not present')
+            return -1
+        self.last_shot = self.adc_device.read_attribute('Shot_id').value
+        return self.last_shot
+
+    def read_rfready(self):
+        if self.adc_device is not None and self.timer_device is not None:
+            self.logger.error('ADC or timer is not present')
+            self.error_stream('ADC or timer is not present')
+            return False
+        av = read_attribute_value(self.adc_device, 'chan16')
+        av_coeff = read_coeff(self.adc_device, 'chan16')
+        cc = self.adc_device.read_attribute('chan22')
+        cc_coeff = read_coeff(self.adc_device, 'chan22')
+        pr = self.timer_device.read_attribute('di60')
+        if av.quality != tango._tango.AttrQuality.ATTR_VALID or \
+                av.value * av_coeff < 8.0 or \
+                cc.quality != tango._tango.AttrQuality.ATTR_VALID or \
+                cc.value * cc_coeff < 0.1 or \
+                not pr.value:
+            return False
+        else:
+            return True
+
     @command(dtype_in=int)
     def SetLogLevel(self, level):
         self.logger.setLevel(level)
@@ -124,6 +164,21 @@ class VasyaPy_Server(Device):
         return result
 
 
+def read_coeff(dev: None, attr: str):
+    try:
+        config = dev.get_attribute_config_ex(attr)[0]
+        return float(config.display_unit)
+    except:
+        return 1.0
+
+def read_attribute_value(dev: None, attr_name: str):
+    try:
+        attribute = dev.read_attribute(attr_name)
+        coeff = read_coeff(dev, attr_name)
+        return attribute.value * coeff
+    except:
+        return float('nan')
+
 def post_init_callback():
     pass
 
@@ -132,14 +187,15 @@ def looping():
     #VasyaPy_Server.logger.debug('loop entry')
     for dev in VasyaPy_Server.devices:
         if dev.adc_device is not None and dev.timer_device is not None:
-            mode = dev.timer_device.read_attribute('Start_mode')
+            mode = dev.timer_device.read_attribute('Start_mode').value
+            #VasyaPy_Server.logger.debug('mode %s' % mode)
             if mode == 1:
-                period = dev.timer_device.read_attribute('Period')
-                elapsed = dev.adc_device.read_attribute('Elapsed')
+                period = dev.timer_device.read_attribute('Period').value
+                elapsed = dev.adc_device.read_attribute('Elapsed').value
                 remained = period - elapsed
                 if not VasyaPy_Server.beeped and remained < 1.0:
                     VasyaPy_Server.logger.debug('1 second to shot - Beep')
-                    winsound.Beep(1000, 300)
+                    winsound.Beep(500, 300)
                     VasyaPy_Server.beeped = True
                 if remained > 2.0:
                     VasyaPy_Server.beeped = False
