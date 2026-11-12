@@ -17,7 +17,7 @@ import winsound
 
 import tango
 from tango import AttrQuality, AttrWriteType, DispLevel, DevState, DebugIt
-from tango.server import Device, attribute, command, pipe, device_property
+from tango.server import Device, attribute, command, device_property
 from Utils import *
 
 class VasyaPy_Server(Device):
